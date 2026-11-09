@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Cơm Nguội Reader</title>
+  <link rel="manifest" href="./manifest.json" />
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --bg-card: #1e293b;
+      --bg-input: #0b1120;
+      --border: #334155;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-hover: #0284c7;
+      --danger: #ef4444;
+      --bar-height: 54px;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    /* Fullscreen Iframe Container */
+    .viewer-container {
+      position: relative;
+      width: 100%;
+      height: calc(100dvh - var(--bar-height) - var(--safe-bottom));
+      background: #121212;
+    }
+
+    iframe#novel-frame {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+      background: #fff;
+    }
+
+    /* Empty state when no link is loaded */
+    .empty-state {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+      background: var(--bg-dark);
+      z-index: 5;
+    }
+
+    .empty-state.hidden {
+      display: none;
+    }
+
+    .empty-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+
+    .empty-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .empty-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+      max-width: 320px;
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #0f172a;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+
+    .btn-primary:active {
+      transform: scale(0.97);
+    }
+
+    /* Loading Progress Bar */
+    .loading-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 3px;
+      width: 0%;
+      background: var(--accent);
+      z-index: 10;
+      transition: width 0.3s ease, opacity 0.3s ease;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loading-bar.active {
+      width: 85%;
+      opacity: 1;
+    }
+
+    /* Fixed Bottom Navigation Bar */
+    .bottom-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: calc(var(--bar-height) + var(--safe-bottom));
+      padding-bottom: var(--safe-bottom);
+      background: var(--bg-dark);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-left: 8px;
+      padding-right: 8px;
+      gap: 8px;
+      z-index: 20;
+      user-select: none;
+    }
+
+    .nav-btn {
+      width: 52px;
+      height: 40px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.15s, transform 0.1s, opacity 0.15s;
+    }
+
+    .nav-btn:active:not(:disabled) {
+      transform: scale(0.94);
+      background: #334155;
+    }
+
+    .nav-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .nav-btn svg {
+      width: 22px;
+      height: 22px;
+      stroke: currentColor;
+      stroke-width: 2.2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* Center Info / Menu Trigger Button */
+    .center-trigger {
+      flex: 1;
+      min-width: 0;
+      height: 40px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-main);
+      padding: 0 12px;
+      display: flex;
+       flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      overflow: hidden;
+    }
+
+    .center-trigger:active {
+      background: #334155;
+    }
+
+    .chapter-badge {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+
+    .story-slug {
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+
+    /* Modal / Bottom Sheet */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(2px);
+      z-index: 50;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+
+    .modal-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-sheet {
+      width: 100%;
+      max-width: 540px;
+      max-height: 82dvh;
+      background: var(--bg-card);
+      border-top-left-radius: 18px;
+      border-top-right-radius: 18px;
+      border-top: 1px solid var(--border);
+      padding: 16px;
+      padding-bottom: calc(18px + var(--safe-bottom));
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      transform: translateY(100%);
+      transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+      overflow-y: auto;
+    }
+
+    .modal-backdrop.open .modal-sheet {
+      transform: translateY(0);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-title {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .close-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 20px;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .section-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .text-input {
+      flex: 1;
+      min-width: 0;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .text-input:focus {
+      border-color: var(--accent);
+    }
+
+    .btn-secondary {
+      background: #334155;
+      color: var(--text-main);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0 12px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-secondary:active {
+      background: #475569;
+    }
+
+    /* Quick chapter jump */
+    .jump-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 12px;
+      gap: 10px;
+    }
+
+    .jump-box.hidden {
+      display: none;
+    }
+
+    .jump-input {
+      width: 90px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 14px;
+      font-weight: 600;
+      text-align: center;
+      outline: none;
+    }
+
+    /* History List */
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 260px;
+      overflow-y: auto;
+    }
+
+    .history-empty {
+      font-size: 13px;
+      color: var(--text-muted);
+      text-align: center;
+      padding: 16px 0;
+    }
+
+    .history-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      gap: 10px;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+
+    .history-item.active {
+      border-color: var(--accent);
+    }
+
+    .history-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .history-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-main);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 2px;
+    }
+
+    .history-meta {
+      font-size: 12px;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .history-time {
+      color: var(--text-muted);
+    }
+
+    .delete-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .delete-btn:hover, .delete-btn:active {
+      color: var(--danger);
+      background: rgba(239, 68, 68, 0.12);
+    }
+
+    .status-hint {
+      font-size: 12px;
+      color: #fbbf24;
+      margin-top: 6px;
+      display: none;
+    }
+
+    .status-hint.visible {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Main Viewer -->
+  <div class="viewer-container">
+    <div id="loading-bar" class="loading-bar"></div>
+
+    <div id="empty-state" class="empty-state">
+      <div class="empty-icon">📖</div>
+      <div class="empty-title">Cơm Nguội Reader</div>
+      <p class="empty-desc">
+        Dán link chương truyện từ <b>comnguoinovel.com</b> để đọc mượt trên điện thoại và chuyển chương không dính quảng cáo.
+      </p>
+      <button class="btn-primary" id="empty-open-btn">
+        <span>📋 Dán link truyện ngay</span>
+      </button>
+    </div>
+
+    <iframe id="novel-frame" title="Cơm Nguội Novel Viewer"></iframe>
+  </div>
+
+  <!-- Fixed Bottom Bar -->
+  <nav class="bottom-bar">
+    <button id="prev-btn" class="nav-btn" title="Chương trước" disabled aria-label="Chương trước">
+      <svg viewBox="0 0 24 24">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+    </button>
+
+    <button id="center-btn" class="center-trigger" title="Bấm để dán link hoặc đổi truyện">
+      <span id="current-chapter-label" class="chapter-badge">Dán link truyện...</span>
+      <span id="current-story-label" class="story-slug">Chạm để mở menu & lịch sử</span>
+    </button>
+
+    <button id="next-btn" class="nav-btn" title="Chương tiếp theo" disabled aria-label="Chương tiếp theo">
+      <svg viewBox="0 0 24 24">
+        <polyline points="9 18 15 12 9 6"></polyline>
+      </svg>
+    </button>
+  </nav>
+
+  <!-- Modal / Bottom Sheet -->
+  <div id="modal-backdrop" class="modal-backdrop">
+    <div class="modal-sheet" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <span class="modal-title">Điều khiển & Tủ truyện</span>
+        <button id="close-modal-btn" class="close-btn" aria-label="Đóng">✕</button>
+      </div>
+
+      <!-- URL Input Section -->
+      <div>
+        <label class="section-label" for="url-input">Link chương truyện (comnguoinovel.com)</label>
+        <form id="url-form" class="input-row">
+          <input
+            id="url-input"
+            type="text"
+            class="text-input"
+            placeholder="https://comnguoinovel.com/truyen/.../chuong/762"
+            autocomplete="off"
+          />
+          <button type="button" id="paste-btn" class="btn-secondary" title="Dán từ bộ nhớ tạm">Dán</button>
+          <button type="submit" class="btn-primary">Đọc</button>
+        </form>
+        <div id="non-chapter-hint" class="status-hint">
+          ⚠️ Link này chưa có <code>/chuong/X</code> nên nút Prev/Next đang khoá. Hãy dán đúng link chương để mở khoá.
+        </div>
+      </div>
+
+      <!-- Quick Jump Chapter -->
+      <div id="jump-box" class="jump-box hidden">
+        <span style="font-size: 13px; font-weight: 600;">Nhảy tới chương:</span>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <input id="jump-input" type="number" min="1" class="jump-input" placeholder="Số chương" />
+          <button type="button" id="jump-btn" class="btn-primary" style="padding: 7px 14px;">Đi</button>
+        </div>
+      </div>
+
+      <!-- Reading History -->
+      <div>
+        <span class="section-label">Tủ truyện đang đọc (Lưu trên máy)</span>
+        <div id="history-list" class="history-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEYS = {
+      LAST_URL: 'cn_reader_last_url',
+      HISTORY: 'cn_reader_history_v1'
+    };
+
+    // Regex nhận diện link chương: https://comnguoinovel.com/truyen/<slug>/chuong/<number>
+    const CHAPTER_REGEX = /^(https?:\/\/(?:www\.)?comnguoinovel\.com\/truyen\/([^\/?#]+)\/chuong\/)(\d+)(?:[\/?#].*)?$/i;
+
+    const iframe = document.getElementById('novel-frame');
+    const loadingBar = document.getElementById('loading-bar');
+    const emptyState = document.getElementById('empty-state');
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const centerBtn = document.getElementById('center-btn');
+    const chapterLabel = document.getElementById('current-chapter-label');
+    const storyLabel = document.getElementById('current-story-label');
+
+    const modalBackdrop = document.getElementById('modal-backdrop');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    const emptyOpenBtn = document.getElementById('empty-open-btn');
+    const urlForm = document.getElementById('url-form');
+    const urlInput = document.getElementById('url-input');
+    const pasteBtn = document.getElementById('paste-btn');
+    const nonChapterHint = document.getElementById('non-chapter-hint');
+    const jumpBox = document.getElementById('jump-box');
+    const jumpInput = document.getElementById('jump-input');
+    const jumpBtn = document.getElementById('jump-btn');
+    const historyListEl = document.getElementById('history-list');
+
+    let currentState = {
+      url: '',
+      isChapterUrl: false,
+      basePrefix: '',
+      slug: '',
+      chapter: null
+    };
+
+    // Chuyển slug "su-huynh-cua-ta-qua-manh" -> "Su Huynh Cua Ta Qua Manh"
+    function formatSlug(slug) {
+      if (!slug) return '';
+      return slug
+        .split('-')
+        .filter(Boolean)
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+    }
+
+    // Trích xuất URL hợp lệ ngay cả khi user copy cả đoạn text markdown hoặc tiêu đề
+    function extractUrl(rawText) {
+      if (!rawText) return '';
+      const trimmed = rawText.trim();
+      const match = trimmed.match(/https?:\/\/(?:www\.)?comnguoinovel\.com[^\s)"'<>]+/i);
+      if (match) return match[0];
+      if (/^(?:www\.)?comnguoinovel\.com/i.test(trimmed)) {
+        return 'https://' + trimmed;
+      }
+      return trimmed;
+    }
+
+    // Phân tích URL
+    function parseNovelUrl(rawUrl) {
+      const cleanUrl = extractUrl(rawUrl);
+      if (!cleanUrl) return null;
+
+      const match = cleanUrl.match(CHAPTER_REGEX);
+      if (match) {
+        const basePrefix = match[1];
+        const slug = match[2];
+        const chapter = parseInt(match[3], 10);
+        return {
+          url: `${basePrefix}${chapter}`,
+          isChapterUrl: true,
+          basePrefix,
+          slug,
+          chapter
+        };
+      }
+
+      // Link bất kỳ của comnguoinovel.com nhưng không phải link chương
+      if (/^https?:\/\/(?:www\.)?comnguoinovel\.com/i.test(cleanUrl)) {
+        return {
+          url: cleanUrl,
+          isChapterUrl: false,
+          basePrefix: '',
+          slug: '',
+          chapter: null
+        };
+      }
+
+      return null;
+    }
+
+    // Đọc danh sách lịch sử từ localStorage
+    function getHistory() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.HISTORY);
+        return raw ? JSON.parse(raw) : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    // Lưu bộ truyện đang đọc vào lịch sử
+    function saveToHistory(parsed) {
+      if (!parsed || !parsed.isChapterUrl) return;
+      const list = getHistory();
+      const existingIdx = list.findIndex(item => item.slug === parsed.slug);
+
+      const entry = {
+        slug: parsed.slug,
+        name: existingIdx >= 0 ? list[existingIdx].name : formatSlug(parsed.slug),
+        basePrefix: parsed.basePrefix,
+        chapter: parsed.chapter,
+        url: parsed.url,
+        updatedAt: Date.now()
+      };
+
+      if (existingIdx >= 0) {
+        list.splice(existingIdx, 1);
+      }
+      list.unshift(entry);
+
+      try {
+        localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(list.slice(0, 50)));
+      } catch (e) {}
+    }
+
+    function deleteFromHistory(slug) {
+      const list = getHistory().filter(item => item.slug !== slug);
+      try {
+        localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(list));
+      } catch (e) {}
+      renderHistory();
+    }
+
+    function formatRelativeTime(timestamp) {
+      if (!timestamp) return '';
+      const diffSec = Math.floor((Date.now() - timestamp) / 1000);
+      if (diffSec < 60) return 'Vừa xong';
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) return `${diffMin} phút trước`;
+      const diffHour = Math.floor(diffMin / 60);
+      if (diffHour < 24) return `${diffHour} giờ trước`;
+      const diffDay = Math.floor(diffHour / 24);
+      return `${diffDay} ngày trước`;
+    }
+
+    function renderHistory() {
+      const list = getHistory();
+      historyListEl.innerHTML = '';
+
+      if (list.length === 0) {
+        historyListEl.innerHTML = '<div class="history-empty">Chưa có bộ truyện nào được lưu.</div>';
+        return;
+      }
+
+      list.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'history-item' + (currentState.slug === item.slug ? ' active' : '');
+
+        const info = document.createElement('div');
+        info.className = 'history-info';
+        info.innerHTML = `
+          <div class="history-name">${item.name}</div>
+          <div class="history-meta">
+            <span>Chương ${item.chapter}</span>
+            <span class="history-time">• ${formatRelativeTime(item.updatedAt)}</span>
+          </div>
+        `;
+
+        info.addEventListener('click', () => {
+          loadNovelUrl(item.url);
+          closeModal();
+        });
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'delete-btn';
+        delBtn.title = 'Xoá khỏi lịch sử';
+        delBtn.textContent = '✕';
+        delBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteFromHistory(item.slug);
+        });
+
+        row.appendChild(info);
+        row.appendChild(delBtn);
+        historyListEl.appendChild(row);
+      });
+    }
+
+    // Cập nhật giao diện thanh đáy và modal
+    function updateUI() {
+      if (!currentState.url) {
+        emptyState.classList.remove('hidden');
+        prevBtn.disabled = true;
+        nextBtn.disabled = true;
+        chapterLabel.textContent = 'Dán link truyện...';
+        storyLabel.textContent = 'Chạm để mở menu & lịch sử';
+        jumpBox.classList.add('hidden');
+        nonChapterHint.classList.remove('visible');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+      urlInput.value = currentState.url;
+
+      if (currentState.isChapterUrl) {
+        chapterLabel.textContent = `Chương ${currentState.chapter}`;
+        storyLabel.textContent = formatSlug(currentState.slug);
+        prevBtn.disabled = currentState.chapter <= 1;
+        nextBtn.disabled = false;
+        jumpBox.classList.remove('hidden');
+        jumpInput.value = currentState.chapter;
+        nonChapterHint.classList.remove('visible');
+        document.title = `Chương ${currentState.chapter} - ${formatSlug(currentState.slug)}`;
+      } else {
+        chapterLabel.textContent = 'Đang xem trang ngoài';
+        storyLabel.textContent = 'Dán link /chuong/X để bật Prev/Next';
+        prevBtn.disabled = true;
+        nextBtn.disabled = true;
+        jumpBox.classList.add('hidden');
+        nonChapterHint.classList.add('visible');
+        document.title = 'Cơm Nguội Reader';
+      }
+    }
+
+    // Load URL vào iframe và lưu trạng thái
+    function loadNovelUrl(rawUrl) {
+      const parsed = parseNovelUrl(rawUrl);
+      if (!parsed) {
+        alert('Vui lòng dán link hợp lệ của comnguoinovel.com!');
+        return false;
+      }
+
+      currentState = parsed;
+
+      // Hiệu ứng loading bar
+      loadingBar.classList.add('active');
+      iframe.src = parsed.url;
+
+      try {
+        localStorage.setItem(STORAGE_KEYS.LAST_URL, parsed.url);
+      } catch (e) {}
+
+      if (parsed.isChapterUrl) {
+        saveToHistory(parsed);
+      }
+
+      updateUI();
+      renderHistory();
+      return true;
+    }
+
+    // Chuyển chương (delta = -1 hoặc +1)
+    function changeChapter(delta) {
+      if (!currentState.isChapterUrl) return;
+      const targetChapter = currentState.chapter + delta;
+      if (targetChapter < 1) return;
+
+      const nextUrl = `${currentState.basePrefix}${targetChapter}`;
+      loadNovelUrl(nextUrl);
+    }
+
+    // Sự kiện khi iframe tải xong
+    iframe.addEventListener('load', () => {
+      loadingBar.classList.remove('active');
+    });
+
+    // Nút Prev / Next cố định ở đáy
+    prevBtn.addEventListener('click', () => changeChapter(-1));
+    nextBtn.addEventListener('click', () => changeChapter(1));
+
+    // Đóng / Mở Modal
+    function openModal() {
+      renderHistory();
+      modalBackdrop.classList.add('open');
+      setTimeout(() => {
+        urlInput.select();
+      }, 150);
+    }
+
+    function closeModal() {
+      modalBackdrop.classList.remove('open');
+    }
+
+    centerBtn.addEventListener('click', openModal);
+    emptyOpenBtn.addEventListener('click', openModal);
+    closeModalBtn.addEventListener('click', closeModal);
+
+    modalBackdrop.addEventListener('click', (e) => {
+      if (e.target === modalBackdrop) closeModal();
+    });
+
+    // Submit form dán link
+    urlForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (loadNovelUrl(urlInput.value)) {
+        if (currentState.isChapterUrl) {
+          closeModal();
+        }
+      }
+    });
+
+    // Nút Dán nhanh từ Clipboard
+    pasteBtn.addEventListener('click', async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          urlInput.value = extractUrl(text);
+          if (loadNovelUrl(urlInput.value) && currentState.isChapterUrl) {
+            closeModal();
+          }
+        }
+      } catch (err) {
+        urlInput.focus();
+      }
+    });
+
+    // Nhảy nhanh đến số chương bất kỳ của truyện đang đọc
+    jumpBtn.addEventListener('click', () => {
+      if (!currentState.isChapterUrl) return;
+      const ch = parseInt(jumpInput.value, 10);
+      if (isNaN(ch) || ch < 1) return;
+      loadNovelUrl(`${currentState.basePrefix}${ch}`);
+      closeModal();
+    });
+
+    jumpInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        jumpBtn.click();
+      }
+    });
+
+    // Khởi tạo: tự động mở lại chương đọc gần nhất trong localStorage
+    (function init() {
+      try {
+        const savedUrl = localStorage.getItem(STORAGE_KEYS.LAST_URL);
+        if (savedUrl) {
+          loadNovelUrl(savedUrl);
+        } else {
+          updateUI();
+          renderHistory();
+        }
+      } catch (e) {
+        updateUI();
+      }
+    })();
+  </script>
+</body>
+</html>
